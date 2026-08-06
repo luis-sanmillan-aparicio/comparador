@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparador de textos</title>
+<style>
+  :root{
+    --bg:#1e1f24;
+    --panel:#26272e;
+    --border:#3a3c46;
+    --text:#d8dae0;
+    --muted:#8a8d99;
+    --accent:#5b8def;
+    --tab:#4d5568;      /* color A: solo tabulación/espacios */
+    --blank:#9c6b2e;    /* color B: línea en blanco descuadrada / línea que falta */
+    --diff:#b5473a;     /* color C: texto realmente distinto */
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:20px;
+  }
+  h1{
+    font-size:1.15rem;
+    font-weight:600;
+    margin:0 0 4px;
+  }
+  p.sub{
+    color:var(--muted);
+    margin:0 0 18px;
+    font-size:0.9rem;
+  }
+  .row{
+    display:flex;
+    gap:14px;
+    margin-bottom:14px;
+  }
+  .col{
+    flex:1;
+    min-width:0;
+  }
+  label{
+    display:block;
+    font-size:0.85rem;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  textarea{
+    width:100%;
+    height:160px;
+    background:var(--panel);
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:10px;
+    font-family:"SF Mono",Consolas,Menlo,monospace;
+    font-size:13px;
+    resize:vertical;
+    overflow:auto;
+    white-space:pre;
+  }
+  button{
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    padding:10px 20px;
+    font-size:0.95rem;
+    font-weight:600;
+    cursor:pointer;
+  }
+  button:active{opacity:0.85;}
+  .legend{
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+    margin:16px 0;
+    font-size:0.82rem;
+    color:var(--muted);
+    align-items:center;
+  }
+  .swatch{
+    display:inline-block;
+    width:12px;
+    height:12px;
+    border-radius:3px;
+    margin-right:6px;
+    vertical-align:-1px;
+  }
+  .result{
+    display:flex;
+    gap:14px;
+  }
+  .panel{
+    flex:1;
+    min-width:0;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    overflow:auto;
+    height:480px;
+  }
+  .panel-title{
+    position:sticky;
+    top:0;
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    padding:8px 12px;
+    font-size:0.8rem;
+    color:var(--muted);
+    z-index:1;
+  }
+  .code{
+    font-family:"SF Mono",Consolas,Menlo,monospace;
+    font-size:13px;
+    line-height:1.55;
+    white-space:pre;
+    width:max-content;
+    min-width:100%;
+  }
+  .line{
+    display:flex;
+    padding:0 12px;
+  }
+  .bar{
+    position:sticky;
+    left:0;
+    width:1ch;
+    flex:none;
+    align-self:stretch;
+    margin-right:8px;
+    background:#3fae5a;
+    z-index:2;
+  }
+  .bar.diffrow{
+    background:#c93a3a;
+  }
+  .ln{
+    color:var(--muted);
+    user-select:none;
+    width:42px;
+    flex:none;
+    text-align:right;
+    margin-right:14px;
+    opacity:0.6;
+  }
+  .txt{white-space:pre;}
+  .empty-line .txt{color:var(--muted); opacity:0.5;}
+  mark.tab{ background:var(--tab); color:#fff; border-radius:2px;}
+  mark.blank{ background:var(--blank); color:#fff; border-radius:2px;}
+  mark.diff{ background:var(--diff); color:#fff; border-radius:2px;}
+  .placeholder{
+    color:var(--muted);
+    padding:20px;
+    font-size:0.9rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>Comparador de textos / código</h1>
+<p class="sub">Pega el texto original a la izquierda y la versión a comparar a la derecha. Los cambios se resaltan solo en el panel derecho.</p>
+
+<div class="row">
+  <div class="col">
+    <label>Texto 1 (izquierda · referencia)</label>
+    <textarea id="input1" wrap="off" placeholder="Pega aquí el texto original..."></textarea>
+  </div>
+  <div class="col">
+    <label>Texto 2 (derecha · a comparar)</label>
+    <textarea id="input2" wrap="off" placeholder="Pega aquí el texto a comparar..."></textarea>
+  </div>
+</div>
+
+<button id="compareBtn">Comparar</button>
+
+<div class="legend">
+  <span><span class="swatch" style="background:var(--tab)"></span>Solo tabulación/espacios al inicio</span>
+  <span><span class="swatch" style="background:var(--blank)"></span>Línea en blanco descuadrada / línea que falta</span>
+  <span><span class="swatch" style="background:var(--diff)"></span>Texto realmente distinto</span>
+  <span><span class="swatch" style="background:#3fae5a"></span>Barra verde = línea idéntica</span>
+  <span><span class="swatch" style="background:#c93a3a"></span>Barra roja = línea con alguna diferencia</span>
+</div>
+
+<div class="result">
+  <div class="panel" id="panelLeft">
+    <div class="panel-title">Texto 1 (referencia)</div>
+    <div class="code" id="codeLeft"><div class="placeholder">Aún no hay comparación.</div></div>
+  </div>
+  <div class="panel" id="panelRight">
+    <div class="panel-title">Texto 2 (cambios resaltados)</div>
+    <div class="code" id="codeRight"><div class="placeholder">Aún no hay comparación.</div></div>
+  </div>
+</div>
+
+<script>
+function escapeHtml(s){
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// LCS-based line diff -> secuencia de operaciones {type:'equal'|'del'|'ins', line}
+function diffLines(a, b){
+  const n = a.length, m = b.length;
+  const dp = Array.from({length:n+1}, ()=> new Int32Array(m+1));
+  for(let i=n-1;i>=0;i--){
+    for(let j=m-1;j>=0;j--){
+      if(a[i]===b[j]) dp[i][j] = dp[i+1][j+1]+1;
+      else dp[i][j] = Math.max(dp[i+1][j], dp[i][j+1]);
+    }
+  }
+  const ops = [];
+  let i=0, j=0;
+  while(i<n && j<m){
+    if(a[i]===b[j]){ ops.push({type:'equal', l:a[i], r:b[j]}); i++; j++; }
+    else if(dp[i+1][j] >= dp[i][j+1]){ ops.push({type:'del', l:a[i]}); i++; }
+    else { ops.push({type:'ins', r:b[j]}); j++; }
+  }
+  while(i<n){ ops.push({type:'del', l:a[i]}); i++; }
+  while(j<m){ ops.push({type:'ins', r:b[j]}); j++; }
+  return ops;
+}
+
+// Agrupa del+ins consecutivos en pares "replace" (alineados por índice)
+function buildRows(ops){
+  const rows = [];
+  let k=0;
+  while(k<ops.length){
+    if(ops[k].type==='equal'){
+      rows.push({kind:'equal', l:ops[k].l, r:ops[k].r});
+      k++;
+      continue;
+    }
+    // recoger bloque de del/ins consecutivos
+    const dels=[], inss=[];
+    while(k<ops.length && ops[k].type==='del'){ dels.push(ops[k].l); k++; }
+    while(k<ops.length && ops[k].type==='ins'){ inss.push(ops[k].r); k++; }
+    const pairs = Math.min(dels.length, inss.length);
+    for(let p=0;p<pairs;p++){
+      rows.push({kind:'replace', l:dels[p], r:inss[p]});
+    }
+    for(let p=pairs;p<dels.length;p++){
+      rows.push({kind:'del-only', l:dels[p], r:null});
+    }
+    for(let p=pairs;p<inss.length;p++){
+      rows.push({kind:'ins-only', l:null, r:inss[p]});
+    }
+  }
+  return rows;
+}
+
+// Diff a nivel de palabra/token para resaltar solo lo que cambió dentro de la línea
+function tokenize(s){
+  return s.match(/\s+|[^\s]+/g) || [];
+}
+function diffWordsHighlightRight(leftLine, rightLine){
+  const a = tokenize(leftLine);
+  const b = tokenize(rightLine);
+  const n=a.length, m=b.length;
+  const dp = Array.from({length:n+1}, ()=> new Int32Array(m+1));
+  for(let i=n-1;i>=0;i--){
+    for(let j=m-1;j>=0;j--){
+      if(a[i]===b[j]) dp[i][j]=dp[i+1][j+1]+1;
+      else dp[i][j]=Math.max(dp[i+1][j], dp[i][j+1]);
+    }
+  }
+  let i=0,j=0;
+  let html='';
+  while(i<n && j<m){
+    if(a[i]===b[j]){ html+=escapeHtml(b[j]); i++; j++; }
+    else if(dp[i+1][j] >= dp[i][j+1]){ i++; }
+    else { html+='<mark class="diff">'+escapeHtml(b[j])+'</mark>'; j++; }
+  }
+  while(j<m){ html+='<mark class="diff">'+escapeHtml(b[j])+'</mark>'; j++; }
+  return html;
+}
+
+function leadingWhitespace(s){
+  const m = s.match(/^[ \t]*/);
+  return m ? m[0] : '';
+}
+
+function renderLine(num, innerHtml, extraClass){
+  return '<div class="line'+(extraClass?(' '+extraClass):'')+'"><span class="ln">'+num+'</span><span class="txt">'+innerHtml+'</span></div>';
+}
+
+function renderRightLine(num, innerHtml, isDiff, extraClass){
+  const barClass = isDiff ? 'bar diffrow' : 'bar';
+  return '<div class="line'+(extraClass?(' '+extraClass):'')+'"><span class="'+barClass+'"></span><span class="ln">'+num+'</span><span class="txt">'+innerHtml+'</span></div>';
+}
+
+function compare(){
+  const t1 = document.getElementById('input1').value;
+  const t2 = document.getElementById('input2').value;
+  const a = t1.split('\n');
+  const b = t2.split('\n');
+
+  const ops = diffLines(a, b);
+  const rows = buildRows(ops);
+
+  let leftHtml = '';
+  let rightHtml = '';
+  let n = 1;
+
+  rows.forEach(row=>{
+    if(row.kind==='equal'){
+      // en 'equal' l===r siempre (así lo garantiza diffLines), por tanto barra verde
+      leftHtml += renderLine(n, escapeHtml(row.l));
+      rightHtml += renderRightLine(n, escapeHtml(row.r), false);
+      n++;
+      return;
+    }
+
+    if(row.kind==='ins-only'){
+      // línea nueva que no existe en la izquierda
+      leftHtml += renderLine(n, '', 'empty-line');
+      rightHtml += renderRightLine(n, '<mark class="blank">'+escapeHtml(row.r)+'</mark>', true);
+      n++;
+      return;
+    }
+
+    if(row.kind==='del-only'){
+      // línea que existía a la izquierda y falta en la derecha
+      leftHtml += renderLine(n, escapeHtml(row.l));
+      rightHtml += renderRightLine(n, '<mark class="blank">&nbsp;(línea ausente)&nbsp;</mark>', true, 'empty-line');
+      n++;
+      return;
+    }
+
+    // row.kind === 'replace'
+    const l = row.l, r = row.r;
+    const lTrim = l.trim(), rTrim = r.trim();
+    const isDiff = (l !== r); // cualquier diferencia, aunque sea un solo carácter -> barra roja
+
+    leftHtml += renderLine(n, escapeHtml(l));
+
+    if(lTrim==='' && rTrim===''){
+      // ambas en blanco pero con distinto contenido de espacios: sin resaltado de texto, pero la barra sí marca la diferencia
+      rightHtml += renderRightLine(n, escapeHtml(r), isDiff);
+    } else if(lTrim==='' || rTrim===''){
+      // desajuste de línea en blanco intercalada
+      rightHtml += renderRightLine(n, '<mark class="blank">'+ (escapeHtml(r) || '&nbsp;') +'</mark>', isDiff);
+    } else if(lTrim === rTrim){
+      // solo cambia la tabulación/espacios iniciales
+      const rLead = leadingWhitespace(r);
+      const rRest = r.slice(rLead.length);
+      const marked = (rLead.length ? '<mark class="tab">'+escapeHtml(rLead)+'</mark>' : '') + escapeHtml(rRest);
+      rightHtml += renderRightLine(n, marked, isDiff);
+    } else {
+      // diferencia real de contenido -> diff por palabras
+      const marked = diffWordsHighlightRight(l, r);
+      rightHtml += renderRightLine(n, marked, isDiff);
+    }
+    n++;
+  });
+
+  document.getElementById('codeLeft').innerHTML = leftHtml || '<div class="placeholder">Sin contenido.</div>';
+  document.getElementById('codeRight').innerHTML = rightHtml || '<div class="placeholder">Sin contenido.</div>';
+}
+
+document.getElementById('compareBtn').addEventListener('click', compare);
+</script>
+</body>
+</html>
