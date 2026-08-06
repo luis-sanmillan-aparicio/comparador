@@ -126,6 +126,12 @@
     display:flex;
     padding:0 12px;
   }
+  .line.clickable{
+    cursor:pointer;
+  }
+  .line.clickable:hover{
+    background:rgba(255,255,255,0.05);
+  }
   .bar{
     position:sticky;
     left:0;
@@ -287,10 +293,14 @@ function renderLine(num, innerHtml, extraClass){
   return '<div class="line'+(extraClass?(' '+extraClass):'')+'"><span class="ln">'+num+'</span><span class="txt">'+innerHtml+'</span></div>';
 }
 
-function renderRightLine(num, innerHtml, isDiff, extraClass){
+function renderRightLine(num, innerHtml, isDiff, extraClass, idx){
   const barClass = isDiff ? 'bar diffrow' : 'bar';
-  return '<div class="line'+(extraClass?(' '+extraClass):'')+'"><span class="'+barClass+'"></span><span class="ln">'+num+'</span><span class="txt">'+innerHtml+'</span></div>';
+  const clickableClass = isDiff ? ' clickable' : '';
+  const idxAttr = isDiff ? ' data-idx="'+idx+'"' : '';
+  return '<div class="line'+clickableClass+(extraClass?(' '+extraClass):'')+'"'+idxAttr+'><span class="'+barClass+'"></span><span class="ln">'+num+'</span><span class="txt">'+innerHtml+'</span></div>';
 }
+
+let lastRows = null;
 
 function compare(){
   const t1 = document.getElementById('input1').value;
@@ -300,16 +310,17 @@ function compare(){
 
   const ops = diffLines(a, b);
   const rows = buildRows(ops);
+  lastRows = rows;
 
   let leftHtml = '';
   let rightHtml = '';
   let n = 1;
 
-  rows.forEach(row=>{
+  rows.forEach((row, idx)=>{
     if(row.kind==='equal'){
       // en 'equal' l===r siempre (así lo garantiza diffLines), por tanto barra verde
       leftHtml += renderLine(n, escapeHtml(row.l));
-      rightHtml += renderRightLine(n, escapeHtml(row.r), false);
+      rightHtml += renderRightLine(n, escapeHtml(row.r), false, null, idx);
       n++;
       return;
     }
@@ -317,7 +328,7 @@ function compare(){
     if(row.kind==='ins-only'){
       // línea nueva que no existe en la izquierda
       leftHtml += renderLine(n, '', 'empty-line');
-      rightHtml += renderRightLine(n, '<mark class="blank">'+escapeHtml(row.r)+'</mark>', true);
+      rightHtml += renderRightLine(n, '<mark class="blank">'+escapeHtml(row.r)+'</mark>', true, null, idx);
       n++;
       return;
     }
@@ -325,7 +336,7 @@ function compare(){
     if(row.kind==='del-only'){
       // línea que existía a la izquierda y falta en la derecha
       leftHtml += renderLine(n, escapeHtml(row.l));
-      rightHtml += renderRightLine(n, '<mark class="blank">&nbsp;(línea ausente)&nbsp;</mark>', true, 'empty-line');
+      rightHtml += renderRightLine(n, '<mark class="blank">&nbsp;(línea ausente)&nbsp;</mark>', true, 'empty-line', idx);
       n++;
       return;
     }
@@ -339,20 +350,20 @@ function compare(){
 
     if(lTrim==='' && rTrim===''){
       // ambas en blanco pero con distinto contenido de espacios: sin resaltado de texto, pero la barra sí marca la diferencia
-      rightHtml += renderRightLine(n, escapeHtml(r), isDiff);
+      rightHtml += renderRightLine(n, escapeHtml(r), isDiff, null, idx);
     } else if(lTrim==='' || rTrim===''){
       // desajuste de línea en blanco intercalada
-      rightHtml += renderRightLine(n, '<mark class="blank">'+ (escapeHtml(r) || '&nbsp;') +'</mark>', isDiff);
+      rightHtml += renderRightLine(n, '<mark class="blank">'+ (escapeHtml(r) || '&nbsp;') +'</mark>', isDiff, null, idx);
     } else if(lTrim === rTrim){
       // solo cambia la tabulación/espacios iniciales
       const rLead = leadingWhitespace(r);
       const rRest = r.slice(rLead.length);
       const marked = (rLead.length ? '<mark class="tab">'+escapeHtml(rLead)+'</mark>' : '') + escapeHtml(rRest);
-      rightHtml += renderRightLine(n, marked, isDiff);
+      rightHtml += renderRightLine(n, marked, isDiff, null, idx);
     } else {
       // diferencia real de contenido -> diff por palabras
       const marked = diffWordsHighlightRight(l, r);
-      rightHtml += renderRightLine(n, marked, isDiff);
+      rightHtml += renderRightLine(n, marked, isDiff, null, idx);
     }
     n++;
   });
@@ -361,8 +372,42 @@ function compare(){
   document.getElementById('codeRight').innerHTML = rightHtml || '<div class="placeholder">Sin contenido.</div>';
 }
 
+function applyFix(idx){
+  if(!lastRows || !lastRows[idx]) return;
+  const row = lastRows[idx];
+  const ok = confirm('¿Desea hacer que esta parte sea idéntica a la parte de la izquierda, eliminando las diferencias?');
+  if(!ok) return;
+
+  if(row.kind==='replace' || row.kind==='del-only'){
+    row.r = row.l;
+    row.kind = 'equal';
+  } else if(row.kind==='ins-only'){
+    row.r = null;
+    row.kind = 'removed';
+  }
+
+  // reconstruir el texto completo de la derecha a partir de las filas (ya con el arreglo aplicado)
+  const newRightLines = [];
+  lastRows.forEach(rw=>{
+    if(rw.kind==='removed' || rw.kind==='del-only') return;
+    newRightLines.push(rw.r);
+  });
+
+  document.getElementById('input2').value = newRightLines.join('\n');
+  compare();
+}
+
+document.getElementById('codeRight').addEventListener('click', function(e){
+  const line = e.target.closest('.line.clickable');
+  if(!line) return;
+  const idx = line.getAttribute('data-idx');
+  if(idx === null) return;
+  applyFix(parseInt(idx, 10));
+});
+
 document.getElementById('compareBtn').addEventListener('click', compare);
 </script>
 </body>
 </html>
+
 
