@@ -198,7 +198,10 @@
     <div class="code" id="codeLeft"><div class="placeholder">Aún no hay comparación.</div></div>
   </div>
   <div class="panel" id="panelRight">
-    <div class="panel-title">Texto 2 (cambios resaltados)</div>
+    <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>Texto 2 (cambios resaltados)</span>
+      <button id="copyBtn" style="padding:4px 10px;font-size:0.75rem;">Copiar</button>
+    </div>
     <div class="code" id="codeRight"><div class="placeholder">Aún no hay comparación.</div></div>
   </div>
 </div>
@@ -406,8 +409,41 @@ document.getElementById('codeRight').addEventListener('click', function(e){
 });
 
 document.getElementById('compareBtn').addEventListener('click', compare);
+
+document.getElementById('copyBtn').addEventListener('click', function(){
+  const copyBtn = document.getElementById('copyBtn');
+  const t2 = document.getElementById('input2').value;
+  const text = (lastRows === null) ? t2 : (function(){
+    // reconstruye el texto limpio de la derecha a partir del estado actual de las filas
+    const lines = [];
+    lastRows.forEach(rw=>{
+      if(rw.kind==='removed' || rw.kind==='del-only') return;
+      lines.push(rw.r);
+    });
+    return lines.join('\n');
+  })();
+
+  const finish = (ok)=>{
+    copyBtn.textContent = ok ? 'Copiado' : 'Error al copiar';
+    setTimeout(()=>{ copyBtn.textContent = 'Copiar'; }, 1500);
+  };
+
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>finish(true)).catch(()=>finish(false));
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try{ document.execCommand('copy'); finish(true); } catch(e){ finish(false); }
+    document.body.removeChild(ta);
+  }
+});
 </script>
 </body>
 </html>
+
 
 
